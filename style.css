@@ -1,0 +1,270 @@
+/* Pharmacy Management System — shared styles
+   One idea, done properly: a fixed sidebar instead of a top bar,
+   one deep accent colour, and tables that read like real data
+   instead of a generated template. */
+
+:root{
+  --ink:#14201F;
+  --paper:#F6F3EC;
+  --accent:#0E3D42;
+  --accent-light:#175159;
+  --accent-tint:#AECBCC;
+  --grey:#6B716E;
+  --rule:#DEDACE;
+  --red:#963C31;
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+
+body{
+  font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  background:var(--paper);
+  color:var(--ink);
+  font-size:15px;
+  line-height:1.5;
+}
+body.centered{
+  min-height:100vh;
+  display:flex;align-items:center;justify-content:center;
+  padding:24px;
+}
+
+/* ============================================================
+   THE ONE IDEA: a fixed left sidebar instead of a top bar.
+   .shell is a flex row (sidebar + content); on a narrow window
+   the media query below flips it to a column, which turns the
+   sidebar into a normal horizontal strip - plain CSS, no JS.
+   ============================================================ */
+.shell{display:flex;min-height:100vh}
+
+.sidebar{
+  flex:0 0 230px;
+  width:230px;
+  background:var(--accent);
+  color:#fff;
+  display:flex;
+  flex-direction:column;
+  padding:28px 22px;
+  box-shadow:2px 0 16px rgba(0,0,0,.10);   /* the one soft shadow allowed */
+}
+.sidebar .brandline{
+  font-weight:700;font-size:15px;letter-spacing:.01em;
+  margin-bottom:30px;color:#fff;
+}
+.sidebar nav{display:flex;flex-direction:column;gap:3px}
+.sidebar nav a{
+  color:var(--accent-tint);
+  text-decoration:none;
+  font-size:14px;
+  padding:9px 11px;
+  border-radius:4px;
+  transition:background-color .15s ease,color .15s ease;
+}
+.sidebar nav a:hover{background:rgba(255,255,255,.10);color:#fff}
+
+/* Pinned to the bottom of the tall sidebar via margin-top:auto;
+   on the narrow layout below it just flows inline instead. */
+.sidebar-foot{
+  margin-top:auto;
+  padding-top:18px;
+  border-top:1px solid rgba(255,255,255,.18);
+}
+.who{display:block;font-size:13px;color:var(--accent-tint);margin-bottom:10px}
+.who em{font-style:normal;opacity:.8}
+
+.content{flex:1;min-width:0}
+
+main{max-width:1000px;margin:0 auto;padding:40px 36px 24px}
+main h1{font-size:29px;line-height:1.1;font-weight:800;letter-spacing:-.01em;margin-bottom:24px}
+
+@media (max-width:760px){
+  .shell{flex-direction:column}
+  .sidebar{
+    width:100%;flex:0 0 auto;
+    flex-direction:row;flex-wrap:wrap;align-items:center;
+    padding:16px 20px;
+    box-shadow:0 2px 16px rgba(0,0,0,.10);
+  }
+  .sidebar .brandline{margin:0 22px 0 0}
+  .sidebar nav{flex-direction:row;flex-wrap:wrap;gap:4px}
+  .sidebar-foot{
+    margin-top:0;margin-left:auto;
+    padding-top:0;border-top:0;
+    display:flex;align-items:center;gap:14px;
+  }
+  .who{margin-bottom:0}
+  main{padding:28px 20px 24px}
+}
+
+/* ---------- cards ---------- */
+.card{
+  background:#fff;
+  border:1px solid var(--rule);
+  border-radius:4px;
+  padding:22px 24px;
+  margin-bottom:20px;
+}
+.card.auth{width:100%;max-width:440px}
+.card.muted{color:var(--grey);font-size:14px}
+.card.good{color:var(--accent);font-weight:600}
+
+.brand{display:flex;gap:12px;align-items:center;margin-bottom:18px}
+.brand .mark{
+  width:34px;height:34px;border-radius:4px;flex:0 0 34px;
+  background:var(--accent);position:relative;
+}
+.brand .mark::before,.brand .mark::after{
+  content:"";position:absolute;background:#fff;
+}
+.brand .mark::before{left:15px;top:8px;width:4px;height:18px}
+.brand .mark::after{left:8px;top:15px;width:18px;height:4px}
+
+/* ---------- headings ---------- */
+h1{font-size:19px;line-height:1.25;color:var(--accent);font-weight:700}
+h2{font-size:16px;line-height:1.2;color:var(--accent);font-weight:700;margin:30px 0 12px}
+
+.muted{color:var(--grey);font-size:13px}
+.small{font-size:12px}
+.right{text-align:right}
+
+/* ---------- forms ---------- */
+label{display:block;font-size:13px;font-weight:600;margin:14px 0 5px}
+input[type=text],input[type=email],input[type=password],
+input[type=number],select,textarea{
+  width:100%;
+  padding:9px 11px;
+  border:1px solid var(--rule);
+  border-radius:4px;
+  font-size:14px;
+  font-family:inherit;
+  background:#fff;
+  color:var(--ink);
+}
+input:focus,select:focus{outline:2px solid var(--accent-light);outline-offset:1px}
+input[type=number]{width:90px}
+
+button,.btn{
+  display:inline-block;
+  margin-top:16px;
+  padding:9px 20px;
+  background:var(--accent);
+  color:#fff;
+  border:0;border-radius:4px;
+  font-size:14px;font-family:inherit;
+  cursor:pointer;text-decoration:none;
+  transition:background-color .15s ease;
+}
+button:hover,.btn:hover{background:var(--accent-light)}
+.btn-green{background:var(--accent);color:#fff}
+.btn-green:hover{background:var(--accent-light)}
+.btn-light{background:#fff;color:var(--accent);border:1px solid var(--rule)}
+.btn-light:hover{background:var(--paper)}
+.btn-small{padding:5px 12px;font-size:13px;margin-top:0}
+
+/* ---------- messages ---------- */
+.alert{
+  padding:10px 13px;border-radius:4px;font-size:13.5px;margin:14px 0;
+  border-left:3px solid transparent;
+}
+.alert-success{background:#E6EEED;border-left-color:var(--accent);color:var(--accent)}
+.alert-error{background:#F7EAE9;border-left-color:var(--red);color:var(--red)}
+
+/* ---------- tables ---------- */
+table{width:100%;border-collapse:collapse;font-size:14px;margin-top:6px;background:#fff}
+th{
+  text-align:left;
+  padding:10px 12px;
+  font-weight:600;font-size:11px;
+  color:var(--grey);
+  text-transform:uppercase;letter-spacing:.06em;
+  border-bottom:2px solid var(--ink);
+}
+td{padding:11px 12px;border-bottom:1px solid var(--rule)}
+tr:hover td{background:var(--paper)}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+
+/* ---------- status: small grey label + a coloured dot ---------- */
+.pill{
+  display:inline-flex;align-items:center;gap:7px;
+  font-size:11px;font-weight:600;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--grey);
+}
+.pill::before{
+  content:"";width:7px;height:7px;border-radius:50%;
+  background:var(--accent);flex:0 0 7px;
+}
+.pill-CANCELLED{color:var(--red)}
+.pill-CANCELLED::before{background:var(--red)}
+
+/* ---------- emphasis inside tables - red is reserved for problems ---------- */
+.low{color:var(--red);font-weight:600}
+
+/* ---------- footer ---------- */
+.foot{
+  margin-top:40px;padding:18px 32px;
+  border-top:1px solid var(--rule);
+  color:var(--grey);font-size:12.5px;text-align:center;
+}
+
+/* ---------- quantity boxes in the order form ---------- */
+input.qty{width:76px;text-align:right;font-variant-numeric:tabular-nums}
+
+/* ---------- search bars above list tables ----------
+   One row: text box, any dropdowns, a Search button, a Clear
+   link. Wraps onto a second line on a narrow window because the
+   container is flex-wrap - no media query needed. */
+.searchbar{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:10px;
+  margin:10px 0 16px;
+}
+.searchbar input[type=text]{
+  width:auto;
+  flex:1 1 220px;
+  margin:0;
+}
+.searchbar select{
+  width:auto;
+  flex:0 0 auto;
+  margin:0;
+}
+.searchbar .btn{margin-top:0}
+.searchbar .clear{
+  font-size:13px;
+  color:var(--grey);
+  text-decoration:underline;
+}
+.result-count{color:var(--grey);font-size:13px;margin:0 0 8px}
+
+/* ---------- filter link rows above list tables ----------
+   A dropdown's whole instruction is the choice itself, so instead of
+   a <select> that waits for Search, each option is its own link -
+   one click, page reloads filtered, no JavaScript. The active choice
+   is plain text, not a link: there is nothing to click when you are
+   already there. */
+.filter-links{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:14px;
+  margin:0 0 16px;
+  font-size:13px;
+}
+.filter-links a{
+  color:var(--grey);
+  text-decoration:underline;
+}
+.filter-links a:hover{color:var(--ink)}
+.filter-links .current{
+  color:var(--accent);
+  font-weight:600;
+  text-decoration:none;
+}
+/* A screen with two filter rows stacked (e.g. Type then Status) needs
+   each one named, or a bare row of links is ambiguous. */
+.filter-links .filter-label{
+  color:var(--ink);
+  font-weight:600;
+}
