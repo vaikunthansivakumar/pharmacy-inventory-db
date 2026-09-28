@@ -75,14 +75,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'pay')
             throw new RuntimeException('Choose a valid payer.');
         }
 
-        $st = $pdo->prepare(
-            "SELECT COALESCE(SUM(amount), 0) FROM PAYMENT
-              WHERE invoice_id = ? AND status = 'PAID'"
-        );
+        // fn_invoice_balance(invoice_id) = total_amount minus every PAID
+        // payment against it - the same rule this page used to compute
+        // inline, now the single source of truth (payment.php's two report
+        // queries below use it too).
+        $st = $pdo->prepare("SELECT fn_invoice_balance(?)");
         $st->execute([$invoiceId]);
-        $paidCents    = (int) round(((float)$st->fetchColumn()) * 100);
-        $totalCents   = (int) round(((float)$invoice['total_amount']) * 100);
-        $balanceCents = $totalCents - $paidCents;
+        $balanceCents = (int) round(((float)$st->fetchColumn()) * 100);
 
         if ($amountCents <= 0) {
             throw new RuntimeException('Enter an amount greater than zero.');
@@ -101,43 +100,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'pay')
              VALUES (?, ?, ?, NOW(), ?, 'PAID')"
         )->execute([$invoiceId, $payerId, $amount, $method]);
 
-        $fullyPaid = ($paidCents + $amountCents) >= $totalCents;
+        $fullyPaid = ($amountCents >= $balanceCents);
 
         if ($fullyPaid) {
             // R6 in code: the invoice is settled, so NOW stock moves.
-            $st = $pdo->prepare(
-                "SELECT medicine_id, quantity FROM ORDER_ITEM WHERE order_id = ?"
-            );
-            $st->execute([$invoice['order_id']]);
-            $lines = $st->fetchAll();
-
-            $deduct = $pdo->prepare(
-                "UPDATE MEDICINE
-                    SET quantity_in_stock = quantity_in_stock - ?
-                  WHERE medicine_id = ? AND quantity_in_stock >= ?"
-            );
-
-            foreach ($lines as $line) {
-                $deduct->execute([$line['quantity'], $line['medicine_id'], $line['quantity']]);
-
-                if ($deduct->rowCount() === 0) {
-                    // Someone else took the stock between confirmation
-                    // and payment. Roll back everything, including the
-                    // PAYMENT row just inserted above.
-                    $nameStmt = $pdo->prepare(
-                        "SELECT name FROM MEDICINE WHERE medicine_id = ?"
-                    );
-                    $nameStmt->execute([$line['medicine_id']]);
-                    $medName = $nameStmt->fetchColumn() ?: ('medicine #' . $line['medicine_id']);
-                    throw new RuntimeException(
-                        "Not enough stock left of $medName to complete this order."
-                    );
-                }
+            // sp_settle_invoice_stock loops over every ORDER_ITEM line for
+            // this order, deducting stock with the same guarded UPDATE this
+            // block used to run in PHP, and moves the order to READY. On a
+            // shortage it SIGNALs; PDO surfaces that as a PDOException whose
+            // errorInfo[2] is the plain message the procedure set, which we
+            // re-throw as a RuntimeException so the existing catch below
+            // still rolls back the whole transaction, PAYMENT row included.
+            try {
+                $pdo->prepare("CALL sp_settle_invoice_stock(?)")
+                    ->execute([$invoice['order_id']]);
+            } catch (PDOException $e) {
+                throw new RuntimeException($e->errorInfo[2] ?? $e->getMessage());
             }
-
-            $pdo->prepare(
-                "UPDATE CUSTOMER_ORDER SET status = 'READY' WHERE order_id = ?"
-            )->execute([$invoice['order_id']]);
         }
 
         $pdo->commit();
@@ -247,14 +226,14 @@ $focusInvoice = (int)($_GET['invoice'] ?? 0);
 
 $focusInfo = null;
 if ($focusInvoice > 0) {
+    // fn_invoice_balance folds the PAYMENT join and GROUP BY this query
+    // used to need into one call.
     $st = $pdo->prepare(
         "SELECT   i.invoice_id, i.order_id, i.total_amount, co.status AS order_status,
-                  COALESCE(SUM(CASE WHEN p.status = 'PAID' THEN p.amount END), 0) AS amount_paid
-           FROM      INVOICE        i
-           JOIN      CUSTOMER_ORDER co ON co.order_id  = i.order_id
-           LEFT JOIN PAYMENT        p  ON p.invoice_id = i.invoice_id
-          WHERE i.invoice_id = ?
-          GROUP BY i.invoice_id, i.order_id, i.total_amount, co.status"
+                  i.total_amount - fn_invoice_balance(i.invoice_id) AS amount_paid
+           FROM INVOICE        i
+           JOIN CUSTOMER_ORDER co ON co.order_id = i.order_id
+          WHERE i.invoice_id = ?"
     );
     $st->execute([$focusInvoice]);
     $focusInfo = $st->fetch();
@@ -286,20 +265,38 @@ if ($focusInvoice > 0) {
 $outstandingStmt = $pdo->prepare(
     "SELECT   i.invoice_id, i.order_id, i.total_amount,
               co.customer_id, su.name AS customer_name,
-              COALESCE(SUM(CASE WHEN p.status = 'PAID' THEN p.amount END), 0) AS amount_paid,
-              i.total_amount
-                - COALESCE(SUM(CASE WHEN p.status = 'PAID' THEN p.amount END), 0) AS balance_due
-       FROM      INVOICE        i
-       JOIN      CUSTOMER_ORDER co ON co.order_id  = i.order_id
-       JOIN      SYSTEM_USER    su ON su.user_id   = co.customer_id
-       LEFT JOIN PAYMENT        p  ON p.invoice_id = i.invoice_id
+              i.total_amount - fn_invoice_balance(i.invoice_id) AS amount_paid,
+              fn_invoice_balance(i.invoice_id) AS balance_due
+       FROM INVOICE        i
+       JOIN CUSTOMER_ORDER co ON co.order_id = i.order_id
+       JOIN SYSTEM_USER    su ON su.user_id  = co.customer_id
       WHERE " . implode(' AND ', $outWhere) . "
-      GROUP BY i.invoice_id, i.order_id, i.total_amount, co.customer_id, su.name
-     HAVING balance_due > 0
+        AND fn_invoice_balance(i.invoice_id) > 0
       ORDER BY i.invoice_id"
 );
 $outstandingStmt->execute($outParams);
 $outstanding = $outstandingStmt->fetchAll();
+
+/* the lines of every outstanding invoice's order, grouped by order_id -
+   same pattern as $pendingItems in pharmacist.php. Shown on the invoice
+   card so it's clear exactly what's being paid for, without switching
+   to the customer's own "My orders" view. */
+$outstandingItems = [];
+if ($outstanding) {
+    $orderIds = array_column($outstanding, 'order_id');
+    $marks = implode(',', array_fill(0, count($orderIds), '?'));
+    $st = $pdo->prepare(
+        "SELECT oi.order_id, m.name, oi.quantity, oi.unit_price
+           FROM ORDER_ITEM oi
+           JOIN MEDICINE   m ON m.medicine_id = oi.medicine_id
+          WHERE oi.order_id IN ($marks)
+          ORDER BY m.name"
+    );
+    $st->execute($orderIds);
+    foreach ($st->fetchAll() as $row) {
+        $outstandingItems[$row['order_id']][] = $row;
+    }
+}
 
 /* every ACTIVE customer, for the payer dropdown - R8 lets it be anyone,
    but a deactivated account must not be usable going forward. A
@@ -411,6 +408,26 @@ show_flash();
                 &middot; Order #<?= h($inv['order_id']) ?>
                 &middot; ordered by <?= h($inv['customer_name']) ?>
             </p>
+
+            <?php if (!empty($outstandingItems[$inv['order_id']])): ?>
+                <table style="margin-bottom:10px">
+                    <tr>
+                        <th>Medicine</th><th class="num">Qty</th>
+                        <th class="num">Unit price</th><th class="num">Line total</th>
+                    </tr>
+                    <?php foreach ($outstandingItems[$inv['order_id']] as $it): ?>
+                        <tr>
+                            <td><?= h($it['name']) ?></td>
+                            <td class="num"><?= h($it['quantity']) ?></td>
+                            <td class="num"><?= number_format($it['unit_price'], 2) ?></td>
+                            <td class="num">
+                                <?= number_format($it['quantity'] * $it['unit_price'], 2) ?>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                </table>
+            <?php endif; ?>
+
             <table>
                 <tr>
                     <th class="num">Invoice total</th>

@@ -340,7 +340,7 @@ show_flash();
                 <td><?= h($m['name']) ?></td>
                 <td><?= h(date('d M Y', strtotime($m['expiry_date']))) ?></td>
                 <td class="num <?= $m['days_left'] < 45 ? 'low' : '' ?>">
-                    <?= h($m['days_left']) ?></td>
+                    <?= $m['days_left'] < 0 ? 'EXPIRED' : h($m['days_left']) ?></td>
                 <td class="num"><?= h($m['quantity_in_stock']) ?></td>
             </tr>
         <?php endforeach; ?>
