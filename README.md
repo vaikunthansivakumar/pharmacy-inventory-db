@@ -23,8 +23,6 @@ A database-driven pharmacy inventory system built for EC5070 (Database Managemen
 - `RESTOCK_ITEM` junction table allows a single restock order to cover multiple medicines
 - All list-view searches use bound parameters (SQL injection protected)
 
-See `docs/er-diagram.png` for the full entity-relationship diagram.
-
 ## Setup
 
 1. Install [XAMPP](https://www.apachefriends.org/) and start Apache + MySQL
@@ -35,12 +33,12 @@ See `docs/er-diagram.png` for the full entity-relationship diagram.
 3. Import the database:
    - Open phpMyAdmin → Create a database named `pharmacy_db`
    - Import `pharmacy_db.sql` from this repo
-4. Copy `config.example.php` to `config.php` and fill in your local DB credentials
+4. Database credentials are set in `db.php` (defaults to XAMPP's `root` user with no password — edit if yours differs)
 5. Visit `http://localhost/pharmacy-inventory-db` in your browser
 
 ## Team
 
-- Vaikunthan Sivakumar
+- Vaikunthan S.
 - Aathithyayan S.
 - Shanjaie V
 
